@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"io/ioutil"
 	"log"
 	"net/http"
 
@@ -39,16 +40,30 @@ func (s *server) autheniticate(w http.ResponseWriter, authdata models.AuthData) 
 
 	}
 	// For a http request
-	aReq, err := http.NewRequest("POST", authUrl, bytes.NewBuffer(jData))
+	aReq, _ := http.NewRequest(http.MethodPost, authUrl, bytes.NewBuffer(jData))
 	c := http.Client{}
 	resp, err := c.Do(aReq)
+	log.Printf("authniticate Response : %v", resp)
 
 	if err != nil {
 		return utils.SendError(w, http.StatusInternalServerError, "Auth Service not reachable")
 	}
 	defer resp.Body.Close()
-	log.Println(resp)
-	if err := json.NewEncoder(w).Encode(resp.Body); err != nil {
+	// Need fix the return of nil response
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return utils.SendError(w, http.StatusInternalServerError, "Auth Service not reachable")
+	}
+	authResponse := models.UserResponse{}
+	if err := json.Unmarshal(b, &authResponse); err != nil {
+		return utils.SendError(w, http.StatusInternalServerError, "error parsing auth response")
+	}
+
+	log.Println("Status code : ", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		return utils.SendError(w, http.StatusUnauthorized, "Bad credientials")
+	}
+	if err := json.NewEncoder(w).Encode(&authResponse); err != nil {
 		log.Fatal("error in sending response ")
 	}
 	return nil
